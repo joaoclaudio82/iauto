@@ -1,2 +1,11 @@
-# Dependências do protótipo (projeto fica em iauto_prototipo/)
--r iauto_prototipo/requirements.txt
+# Dependências do SERVIDOR WEB (deploy). Para rodar o CLI localmente com
+# áudio ao vivo, use iauto_prototipo/requirements.txt, que inclui também
+# sounddevice, soundfile, numpy, pyttsx3 e gTTS.
+
+# Transcrição ASR (Whisper local)
+faster-whisper>=1.0.0
+
+# API e upload de áudio
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
