@@ -21,9 +21,11 @@ import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from analise import analisar_entrevista
+from analise_llm import analisar_com_fallback
+from api_pipeline import router as router_pipeline
 from relatorio import gerar_relatorio
 from roteiro import gerar_roteiro
+from transcricao import AsrOcupadoErro, escolher_modelo, transcrever
 
 RAIZ = os.path.dirname(os.path.abspath(__file__))
 CAMINHO_INDEX = os.path.join(RAIZ, "web", "index.html")
@@ -38,9 +40,9 @@ EXTENSAO_POR_TIPO = {
 }
 
 app = FastAPI(title="iAuto — Entrevista Automatizada")
+app.include_router(router_pipeline)
 
 _sessoes = {}
-_trava_asr = threading.Lock()
 _config = {"vaga": None, "candidato": None, "modelo": "tiny"}
 
 # Voz neural do entrevistador (Microsoft, via edge-tts). O frontend cai para a
@@ -62,27 +64,14 @@ def _criar_pasta_saida(candidato):
     return pasta
 
 
-def _escolher_modelo(preferido="small", reserva="tiny"):
-    """Usa o modelo preferido se já estiver no cache local; senão, o reserva."""
-    base = os.environ.get(
-        "HF_HOME", os.path.join(os.path.expanduser("~"), ".cache", "huggingface")
-    )
-    pasta = os.path.join(base, "hub", f"models--Systran--faster-whisper-{preferido}")
-    for _raiz, _dirs, arquivos in os.walk(pasta):
-        if "model.bin" in arquivos:
-            return preferido
-    return reserva
-
-
 def _carregar_asr():
     """Pré-carrega o modelo ASR para a primeira transcrição não esperar."""
     from transcricao import carregar_modelo
 
-    with _trava_asr:
-        try:
-            carregar_modelo(_config["modelo"])
-        except Exception as erro:
-            print(f"[iAuto] Falha ao carregar o modelo ASR: {erro}")
+    try:
+        carregar_modelo(_config["modelo"])
+    except Exception as erro:
+        print(f"[iAuto] Falha ao carregar o modelo ASR: {erro}")
 
 
 @app.get("/")
@@ -171,13 +160,12 @@ def receber_resposta(
             destino.write(audio.file.read())
         item["arquivo_audio"] = caminho
 
-        from transcricao import transcrever
-
-        with _trava_asr:
-            try:
-                item["resposta"] = transcrever(caminho, _config["modelo"])
-            except Exception as erro:
-                raise HTTPException(500, f"Falha na transcrição: {erro}")
+        try:
+            item["resposta"] = transcrever(caminho, _config["modelo"])
+        except AsrOcupadoErro as erro:
+            raise HTTPException(503, str(erro))
+        except Exception as erro:
+            raise HTTPException(500, f"Falha na transcrição: {erro}")
     else:
         item["resposta"] = (texto or "").strip()
 
@@ -197,7 +185,7 @@ def finalizar(sessao_id: str):
         item.setdefault("resposta", "")
         respostas.append(item)
 
-    analise = analisar_entrevista(sessao["vaga"], respostas)
+    analise = analisar_com_fallback(sessao["vaga"], respostas)
     caminho_md, caminho_json = gerar_relatorio(
         sessao["vaga"], sessao["candidato"], respostas, analise, sessao["pasta"]
     )
@@ -240,7 +228,7 @@ def _carregar_configuracao(caminho_vaga=None, caminho_candidato=None, modelo="au
     _config["candidato"] = _carregar_json(
         caminho_candidato or os.path.join(RAIZ, "dados", "candidato_exemplo.json")
     )
-    _config["modelo"] = _escolher_modelo() if modelo == "auto" else modelo
+    _config["modelo"] = escolher_modelo() if modelo == "auto" else modelo
 
 
 # Configuração padrão no import, para `uvicorn servidor:app` também funcionar.

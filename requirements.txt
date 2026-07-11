@@ -12,3 +12,6 @@ python-multipart>=0.0.9
 
 # Voz neural do entrevistador (vozes Microsoft, sem chave de API)
 edge-tts>=7.0
+
+# Análise semântica opcional via OpenRouter (cliente compatível com OpenAI)
+openai>=1.40

@@ -43,6 +43,23 @@ python servidor.py --porta 8123
 
 O `servidor.py` sobe uma API (FastAPI) que reaproveita os mesmos módulos do CLI e serve a interface de `web/index.html`: a pergunta é exibida e falada pela voz do navegador, um cronômetro em anel marca o tempo, a resposta é gravada pelo microfone (com waveform ao vivo) e enviada para transcrição no servidor. Ao final, o relatório aparece na própria página — nota geral, aderência por competência, riscos e lacunas, transcrição completa — com download do `.md` e do `.json`. Sem microfone, a interface degrada para respostas digitadas. Com `--modelo auto` (padrão), o servidor usa o Whisper `small` se ele já estiver no cache local e `tiny` caso contrário.
 
+### API de integração (`/api/v1`)
+
+Além do fluxo de sessão da interface web, o servidor expõe rotas **sem estado** para integração com outros backends (por exemplo, um sistema em Spring que é o dono dos cadastros): cada chamada envia os dados completos e recebe o resultado, sem sessão nem escrita em disco. Documentação interativa em `/docs` e contrato OpenAPI em `/openapi.json` (útil para gerar clientes automaticamente).
+
+| Rota | Corpo | Retorno |
+|---|---|---|
+| `POST /api/v1/roteiro` | `{ "vaga": {...}, "candidato": {...} }` | `{ "perguntas": [...] }` |
+| `POST /api/v1/transcricao` | multipart: `audio` (arquivo) e `modelo` opcional (`auto`/`tiny`/`base`/`small`/`medium`) | `{ "texto": "...", "modelo": "small" }` |
+| `POST /api/v1/analise` | `{ "vaga": {...}, "respostas": [...] }` | mesmo formato da análise do relatório, mais `"metodo"` |
+| `POST /api/v1/relatorio` | `{ "vaga", "candidato", "respostas", "analise" }` | `{ "relatorio_md": "...", "relatorio_json": {...} }` |
+
+Os formatos de `vaga`, `candidato` e `respostas` são os mesmos dos arquivos de `dados/` e do roteiro gerado.
+
+### Análise semântica com LLM (opcional)
+
+Com as variáveis de ambiente `OPENROUTER_API_KEY` e `OPENROUTER_MODEL` configuradas (chave e slug de modelo de <https://openrouter.ai/models>, por exemplo `anthropic/claude-sonnet-4.5`), a análise de aderência — tanto em `POST /api/v1/analise` quanto no fim da entrevista web — passa a ser feita por um LLM, que entende sinônimos, contexto e profundidade real das respostas. Os campos objetivos (contagem de palavras, termos identificados, presença de exemplo) continuam calculados deterministicamente em Python, e a nota geral é sempre a média ponderada pelos pesos. Sem as variáveis — ou em qualquer falha do serviço — a análise cai automaticamente para a heurística local, e o campo `metodo` da resposta indica qual caminho foi usado (`llm` ou `heuristico`).
+
 Parâmetros úteis: `--vaga` e `--candidato` apontam para outros arquivos JSON, `--modelo` troca o tamanho do ASR (`tiny`, `base`, `small`, `medium`) e `--tempo` fixa um limite único de resposta em segundos no modo audio.
 
 A saída de cada execução fica em `saida/<data>_<candidato>/`, com os WAV gravados (modo audio), o `relatorio.md` e o `relatorio.json`. A pasta `saida_exemplo/` traz um relatório já gerado, para conhecer o formato sem rodar nada.

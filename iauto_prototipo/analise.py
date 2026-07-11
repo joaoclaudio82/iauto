@@ -20,7 +20,7 @@ MARCADORES_EXEMPLO = [
 ]
 
 
-def _cobertura(resposta_norm, palavras_chave):
+def cobertura(resposta_norm, palavras_chave):
     termos_norm = [normalizar(termo) for termo in palavras_chave]
     encontrados = [
         original for original, termo in zip(palavras_chave, termos_norm)
@@ -50,7 +50,7 @@ def avaliar_resposta(resposta, palavras_chave):
     resposta_norm = normalizar(resposta)
     n_palavras = len(resposta.split())
 
-    proporcao, termos = _cobertura(resposta_norm, palavras_chave)
+    proporcao, termos = cobertura(resposta_norm, palavras_chave)
     tem_exemplo = any(marcador in resposta_norm for marcador in MARCADORES_EXEMPLO)
 
     pontos_termos = 60.0 * min(1.0, proporcao / 0.5)

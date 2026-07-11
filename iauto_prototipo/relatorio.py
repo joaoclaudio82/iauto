@@ -14,7 +14,8 @@ def _secao_lista(titulo, itens, vazio):
     return linhas
 
 
-def gerar_relatorio(vaga, candidato, respostas, analise, pasta_saida):
+def montar_relatorio(vaga, candidato, respostas, analise):
+    """Monta o relatório em memória: retorna (texto_markdown, dados_json)."""
     agora = datetime.now()
     empresa = f" ({vaga['empresa']})" if vaga.get("empresa") else ""
 
@@ -71,10 +72,7 @@ def gerar_relatorio(vaga, candidato, respostas, analise, pasta_saida):
         linhas.append(f"Resposta: {item.get('resposta') or '(sem resposta)'}")
         linhas.append("")
 
-    caminho_md = os.path.join(pasta_saida, "relatorio.md")
-    with open(caminho_md, "w", encoding="utf-8") as arquivo:
-        arquivo.write("\n".join(linhas))
-
+    texto_md = "\n".join(linhas)
     dados = {
         "gerado_em": agora.isoformat(timespec="seconds"),
         "vaga": vaga["titulo"],
@@ -82,6 +80,17 @@ def gerar_relatorio(vaga, candidato, respostas, analise, pasta_saida):
         "analise": analise,
         "entrevista": respostas,
     }
+    return texto_md, dados
+
+
+def gerar_relatorio(vaga, candidato, respostas, analise, pasta_saida):
+    """Monta o relatório e o grava em disco; retorna (caminho_md, caminho_json)."""
+    texto_md, dados = montar_relatorio(vaga, candidato, respostas, analise)
+
+    caminho_md = os.path.join(pasta_saida, "relatorio.md")
+    with open(caminho_md, "w", encoding="utf-8") as arquivo:
+        arquivo.write(texto_md)
+
     caminho_json = os.path.join(pasta_saida, "relatorio.json")
     with open(caminho_json, "w", encoding="utf-8") as arquivo:
         json.dump(dados, arquivo, ensure_ascii=False, indent=2)
