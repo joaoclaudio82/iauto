@@ -919,7 +919,48 @@ a.btn{text-decoration:none}
       }, { once: true });
     });
   }
+  // 1ª opção: voz neural sintetizada no servidor (edge-tts). Se o serviço
+  // estiver fora, desistimos dele pela sessão inteira e caímos para a voz
+  // do navegador — a entrevista nunca trava por causa da voz.
+  let ttsServidorOk = true;
+  let audioTTS = null;
+  async function falarServidor(texto){
+    if (!ttsServidorOk) return false;
+    let blob;
+    try{
+      const resp = await fetch("/api/tts?texto=" + encodeURIComponent(texto));
+      if (!resp.ok) throw new Error("http " + resp.status);
+      blob = await resp.blob();
+      if (!blob || blob.size === 0) throw new Error("áudio vazio");
+    } catch(e){
+      ttsServidorOk = false;
+      return false;
+    }
+    return new Promise(function(res){
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioTTS = audio;
+      let comecou = false, feito = false;
+      const fim = function(ok){
+        if (feito) return;
+        feito = true;
+        clearTimeout(seguranca);
+        URL.revokeObjectURL(url);
+        if (audioTTS === audio) audioTTS = null;
+        res(ok);
+      };
+      const seguranca = setTimeout(function(){ fim(comecou); },
+        Math.min(4000 + texto.length * 95, 30000));
+      audio.onplaying = function(){ comecou = true; };
+      audio.onended = function(){ fim(true); };
+      audio.onpause = function(){ fim(comecou); };       // silenciarTTS() pausa
+      audio.onerror = function(){ fim(comecou); };       // erro no meio: não refalar
+      audio.play().catch(function(){ fim(false); });
+    });
+  }
+
   async function falar(texto){
+    if (await falarServidor(texto)) return;
     if (!("speechSynthesis" in window)) return;
     await esperarVozes();
     return new Promise(function(res){
@@ -927,8 +968,10 @@ a.btn{text-decoration:none}
         window.speechSynthesis.cancel(); // nunca sobrepor falas
         const u = new SpeechSynthesisUtterance(texto);
         u.lang = "pt-BR";
+        const ehPtBr = function(v){ return v.lang && v.lang.toLowerCase().replace("_","-").indexOf("pt-br") === 0; };
         const voz =
-          vozes.find(function(v){ return v.lang && v.lang.toLowerCase().replace("_","-").indexOf("pt-br") === 0; }) ||
+          vozes.find(function(v){ return ehPtBr(v) && /natural|online/i.test(v.name || ""); }) ||
+          vozes.find(ehPtBr) ||
           vozes.find(function(v){ return v.lang && v.lang.toLowerCase().indexOf("pt") === 0; });
         if (voz) u.voice = voz;
         u.rate = 1; u.pitch = 1;
@@ -951,6 +994,7 @@ a.btn{text-decoration:none}
   }
   // corta qualquer fala residual antes de gravar/concluir, para o microfone não captá-la
   function silenciarTTS(){
+    try { if (audioTTS){ audioTTS.pause(); audioTTS = null; } } catch(e){}
     try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); } catch(e){}
   }
 
@@ -1452,6 +1496,11 @@ a.btn{text-decoration:none}
     sessao = await requisitar(function(){
       return pegarJSON("/api/sessao", { method: "POST" });
     }, "Não foi possível criar a sessão de entrevista.");
+
+    // pré-aquece a síntese de voz das perguntas (fire-and-forget)
+    (sessao.perguntas || []).forEach(function(p){
+      fetch("/api/tts?texto=" + encodeURIComponent(p.pergunta)).catch(function(){});
+    });
 
     mostrarTela("telaEntrevista");
     fluxoEntrevista();

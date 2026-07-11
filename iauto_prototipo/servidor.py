@@ -19,7 +19,7 @@ from datetime import datetime
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from analise import analisar_entrevista
 from relatorio import gerar_relatorio
@@ -42,6 +42,11 @@ app = FastAPI(title="iAuto — Entrevista Automatizada")
 _sessoes = {}
 _trava_asr = threading.Lock()
 _config = {"vaga": None, "candidato": None, "modelo": "tiny"}
+
+# Voz neural do entrevistador (Microsoft, via edge-tts). O frontend cai para a
+# voz do navegador se este endpoint estiver indisponível.
+VOZ_TTS = os.environ.get("VOZ_TTS", "pt-BR-FranciscaNeural")
+_cache_tts = {}
 
 
 def _carregar_json(caminho):
@@ -94,6 +99,29 @@ def informacoes():
         "candidato": _config["candidato"],
         "modelo_asr": _config["modelo"],
     }
+
+
+@app.get("/api/tts")
+async def sintetizar_voz(texto: str):
+    texto = (texto or "").strip()
+    if not texto or len(texto) > 600:
+        raise HTTPException(400, "Texto vazio ou longo demais para sintetizar.")
+    chave = (VOZ_TTS, texto)
+    if chave not in _cache_tts:
+        try:
+            import edge_tts
+
+            partes = []
+            async for pedaco in edge_tts.Communicate(texto, VOZ_TTS).stream():
+                if pedaco["type"] == "audio":
+                    partes.append(pedaco["data"])
+            audio = b"".join(partes)
+            if not audio:
+                raise RuntimeError("o serviço de voz devolveu áudio vazio")
+            _cache_tts[chave] = audio
+        except Exception as erro:
+            raise HTTPException(503, f"Voz neural indisponível: {erro}")
+    return Response(content=_cache_tts[chave], media_type="audio/mpeg")
 
 
 @app.post("/api/sessao")
