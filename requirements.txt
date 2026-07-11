@@ -1,0 +1,2 @@
+# Dependências do protótipo (projeto fica em iauto_prototipo/)
+-r iauto_prototipo/requirements.txt

@@ -224,16 +224,23 @@ def principal():
     parser.add_argument("--vaga", help="arquivo JSON da vaga")
     parser.add_argument("--candidato", help="arquivo JSON do candidato")
     parser.add_argument(
-        "--modelo", default="auto",
+        "--modelo", default=os.environ.get("MODELO_ASR", "auto"),
         help="tiny, base, small, medium ou auto (small se já baixado)",
     )
-    parser.add_argument("--porta", type=int, default=8123)
+    parser.add_argument(
+        "--porta", type=int, default=int(os.environ.get("PORT", "8123")),
+        help="porta HTTP (padrão: variável PORT ou 8123)",
+    )
+    parser.add_argument(
+        "--host", default=os.environ.get("HOST", "127.0.0.1"),
+        help="endereço de escuta (use 0.0.0.0 em deploy)",
+    )
     args = parser.parse_args()
 
     _carregar_configuracao(args.vaga, args.candidato, args.modelo)
     print(f"[iAuto] Modelo ASR: {_config['modelo']}")
-    print(f"[iAuto] Abra no navegador: http://127.0.0.1:{args.porta}")
-    uvicorn.run(app, host="127.0.0.1", port=args.porta)
+    print(f"[iAuto] Escutando em http://{args.host}:{args.porta}")
+    uvicorn.run(app, host=args.host, port=args.porta)
 
 
 if __name__ == "__main__":
