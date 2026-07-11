@@ -1,0 +1,16 @@
+# Transcrição ASR (Transformer / Whisper local)
+faster-whisper>=1.0.0
+
+# Áudio ao vivo (modo audio)
+sounddevice>=0.4.6
+soundfile>=0.12.1
+numpy>=1.24
+
+# Voz do entrevistador (TTS): pyttsx3 funciona offline; gTTS usa a internet
+pyttsx3>=2.90
+gTTS>=2.5.0
+
+# Interface web (entrevista no navegador)
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9

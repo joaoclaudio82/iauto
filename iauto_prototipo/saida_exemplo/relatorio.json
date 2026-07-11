@@ -1,0 +1,158 @@
+{
+  "gerado_em": "2026-07-11T02:56:37",
+  "vaga": "Analista de Dados Pleno",
+  "candidato": "Maria Silva",
+  "analise": {
+    "nota_geral": 72,
+    "recomendacao": "Aderência intermediária. Avaliar com atenção os riscos e as lacunas indicados.",
+    "avaliacoes": [
+      {
+        "nota": 87,
+        "situacao": "aderente",
+        "termos_identificados": [
+          "sql",
+          "consulta",
+          "join",
+          "banco de dados",
+          "tabela",
+          "índice",
+          "otimização"
+        ],
+        "trechos_relevantes": [
+          "No projeto de varejo eu fazia consultas SQL com vários joins em tabelas grandes, criei índices para otimização e o resultado foi um ganho de desempenho de quarenta por cento nas rotinas diárias do banco de dados."
+        ],
+        "tem_exemplo": true,
+        "n_palavras": 37,
+        "riscos": [],
+        "competencia": "SQL e modelagem de dados",
+        "peso": 3
+      },
+      {
+        "nota": 88,
+        "situacao": "aderente",
+        "termos_identificados": [
+          "python",
+          "pandas",
+          "numpy",
+          "script",
+          "automação"
+        ],
+        "trechos_relevantes": [
+          "Eu criei scripts em Python com pandas para automação de relatórios semanais, por exemplo um script que lia planilhas, tratava os dados com numpy e gerava os arquivos finais, e conseguimos reduzir o tempo de fechamento de dois dias para duas horas."
+        ],
+        "tem_exemplo": true,
+        "n_palavras": 42,
+        "riscos": [],
+        "competencia": "Python para análise de dados",
+        "peso": 3
+      },
+      {
+        "nota": 84,
+        "situacao": "aderente",
+        "termos_identificados": [
+          "negócio",
+          "cliente",
+          "stakeholder",
+          "área",
+          "explicar"
+        ],
+        "trechos_relevantes": [
+          "Participo de reuniões com as áreas de negócio para explicar os indicadores e alinhar prioridades com cada stakeholder, e apresento os resultados de forma simples para o cliente interno."
+        ],
+        "tem_exemplo": true,
+        "n_palavras": 29,
+        "riscos": [],
+        "competencia": "Comunicação com áreas de negócio",
+        "peso": 2
+      },
+      {
+        "nota": 16,
+        "situacao": "lacuna",
+        "termos_identificados": [
+          "power bi"
+        ],
+        "trechos_relevantes": [
+          "Já usei Power BI."
+        ],
+        "tem_exemplo": false,
+        "n_palavras": 4,
+        "riscos": [
+          "resposta muito curta, com pouco conteúdo avaliável",
+          "não apresentou exemplo concreto nem resultado"
+        ],
+        "competencia": "Visualização de dados",
+        "peso": 2
+      }
+    ],
+    "destaques": [
+      "SQL e modelagem de dados",
+      "Python para análise de dados",
+      "Comunicação com áreas de negócio"
+    ],
+    "riscos": [
+      "Visualização de dados: resposta muito curta, com pouco conteúdo avaliável",
+      "Visualização de dados: não apresentou exemplo concreto nem resultado"
+    ],
+    "lacunas": [
+      "Visualização de dados"
+    ]
+  },
+  "entrevista": [
+    {
+      "id": 1,
+      "tipo": "abertura",
+      "competencia": null,
+      "pergunta": "Olá, Maria. Esta é uma entrevista automatizada para a vaga de Analista de Dados Pleno. Para começar, fale brevemente sobre a sua trajetória profissional e o que mais chamou a sua atenção nesta vaga.",
+      "tempo_max": 90,
+      "resposta": "Sou analista de dados há quatro anos, trabalhei em varejo e me interessei pela vaga por causa do foco em análises para o time comercial."
+    },
+    {
+      "id": 2,
+      "tipo": "competencia",
+      "competencia": "SQL e modelagem de dados",
+      "pergunta": "No seu currículo consta a seguinte experiência: Consultas SQL em bases com milhões de registros. Conte com mais detalhes como foi essa atuação, com foco em SQL e modelagem de dados: qual era o problema, o que você fez e qual foi o resultado.",
+      "tempo_max": 120,
+      "resposta": "No projeto de varejo eu fazia consultas SQL com vários joins em tabelas grandes, criei índices para otimização e o resultado foi um ganho de desempenho de quarenta por cento nas rotinas diárias do banco de dados."
+    },
+    {
+      "id": 3,
+      "tipo": "competencia",
+      "competencia": "Python para análise de dados",
+      "pergunta": "No seu currículo consta a seguinte experiência: Automação de relatórios com Python e pandas. Conte com mais detalhes como foi essa atuação, com foco em Python para análise de dados: qual era o problema, o que você fez e qual foi o resultado.",
+      "tempo_max": 120,
+      "resposta": "Eu criei scripts em Python com pandas para automação de relatórios semanais, por exemplo um script que lia planilhas, tratava os dados com numpy e gerava os arquivos finais, e conseguimos reduzir o tempo de fechamento de dois dias para duas horas."
+    },
+    {
+      "id": 4,
+      "tipo": "competencia",
+      "competencia": "Comunicação com áreas de negócio",
+      "pergunta": "Descreva uma situação real em que você precisou aplicar Comunicação com áreas de negócio. Explique o contexto, as suas ações e o resultado obtido.",
+      "tempo_max": 120,
+      "resposta": "Participo de reuniões com as áreas de negócio para explicar os indicadores e alinhar prioridades com cada stakeholder, e apresento os resultados de forma simples para o cliente interno."
+    },
+    {
+      "id": 5,
+      "tipo": "competencia",
+      "competencia": "Visualização de dados",
+      "pergunta": "No seu currículo consta a seguinte experiência: Criação de painéis comerciais em Power BI para uma rede de varejo. Conte com mais detalhes como foi essa atuação, com foco em Visualização de dados: qual era o problema, o que você fez e qual foi o resultado.",
+      "tempo_max": 120,
+      "resposta": "Já usei Power BI."
+    },
+    {
+      "id": 6,
+      "tipo": "situacional",
+      "competencia": null,
+      "pergunta": "Imagine que uma entrega importante sob a sua responsabilidade está atrasada e outra área depende desse resultado ainda nesta semana. Descreva como você conduziria essa situação.",
+      "tempo_max": 90,
+      "resposta": "Eu avisaria a área com antecedência, negociaria uma entrega parcial priorizando o que gera mais impacto e ajustaria o cronograma com o gestor."
+    },
+    {
+      "id": 7,
+      "tipo": "encerramento",
+      "competencia": null,
+      "pergunta": "Para finalizar, existe algum ponto relevante sobre você que não foi perguntado e que gostaria de registrar?",
+      "tempo_max": 60,
+      "resposta": "Gostaria de registrar que tenho disponibilidade imediata e muito interesse na empresa."
+    }
+  ]
+}

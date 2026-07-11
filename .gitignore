@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Saídas de entrevistas (áudios gravados e relatórios gerados)
+iauto_prototipo/saida/
+
+# Pacotes e temporários
+*.zip

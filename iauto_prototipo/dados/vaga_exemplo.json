@@ -1,0 +1,27 @@
+{
+  "titulo": "Analista de Dados Pleno",
+  "empresa": "Empresa Exemplo",
+  "descricao": "Atuar na criação de painéis e análises para o time comercial.",
+  "competencias": [
+    {
+      "nome": "SQL e modelagem de dados",
+      "peso": 3,
+      "palavras_chave": ["sql", "consulta", "join", "banco de dados", "modelagem", "tabela", "índice", "otimização"]
+    },
+    {
+      "nome": "Python para análise de dados",
+      "peso": 3,
+      "palavras_chave": ["python", "pandas", "numpy", "script", "automação", "jupyter", "biblioteca"]
+    },
+    {
+      "nome": "Comunicação com áreas de negócio",
+      "peso": 2,
+      "palavras_chave": ["negócio", "cliente", "apresentação", "reunião", "stakeholder", "área", "comunicação", "explicar"]
+    },
+    {
+      "nome": "Visualização de dados",
+      "peso": 2,
+      "palavras_chave": ["dashboard", "painel", "power bi", "tableau", "gráfico", "indicador", "kpi", "metabase"]
+    }
+  ]
+}

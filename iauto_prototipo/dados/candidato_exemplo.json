@@ -1,0 +1,9 @@
+{
+  "nome": "Maria Silva",
+  "resumo": "Analista de dados com 4 anos de experiência em varejo, atuando com SQL, Python e Power BI.",
+  "experiencias": [
+    "Criação de painéis comerciais em Power BI para uma rede de varejo",
+    "Automação de relatórios com Python e pandas",
+    "Consultas SQL em bases com milhões de registros"
+  ]
+}
