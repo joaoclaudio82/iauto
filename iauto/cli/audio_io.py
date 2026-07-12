@@ -1,4 +1,4 @@
-"""Entrada e saída de áudio: voz do entrevistador (TTS) e gravação das respostas.
+"""Entrada e saída de áudio do CLI: voz do entrevistador (TTS) e gravação.
 
 O fluxo de gravação segue o comportamento definido para o produto: a pergunta
 é exibida e falada, um cronômetro marca o tempo, o candidato encerra com Enter
@@ -16,6 +16,7 @@ def falar(texto):
     # Primeira opção: pyttsx3, que funciona offline (no Linux exige espeak-ng).
     try:
         import pyttsx3
+
         motor = pyttsx3.init()
         for voz in motor.getProperty("voices"):
             identificacao = f"{voz.id} {getattr(voz, 'name', '')}".lower()

@@ -2,12 +2,14 @@
 
 Usa o Whisper por meio da biblioteca faster-whisper, executado localmente na
 CPU. O Whisper é um Transformer codificador-decodificador com mecanismo de
-atenção, robusto a variações de sotaque e a ruídos de fundo, alinhado ao que
-o projeto descreve para o módulo iAuto.
+atenção, robusto a variações de sotaque e a ruídos de fundo.
 """
 
+import logging
 import os
 import threading
+
+logger = logging.getLogger(__name__)
 
 _MODELOS = {}
 # Uma trava por tamanho de modelo: o download/carga de um tamanho novo não
@@ -21,16 +23,14 @@ class AsrOcupadoErro(RuntimeError):
     """O ASR está ocupado além do tempo de espera; o chamador deve responder 503."""
 
 
-def _trava_do(tamanho):
+def _trava_do(tamanho: str) -> threading.Lock:
     with _TRAVA_GLOBAL:
         return _TRAVAS.setdefault(tamanho, threading.Lock())
 
 
-def escolher_modelo(preferido="small", reserva="tiny"):
+def escolher_modelo(preferido: str = "small", reserva: str = "tiny") -> str:
     """Usa o modelo preferido se já estiver no cache local; senão, o reserva."""
-    base = os.environ.get(
-        "HF_HOME", os.path.join(os.path.expanduser("~"), ".cache", "huggingface")
-    )
+    base = os.environ.get("HF_HOME", os.path.join(os.path.expanduser("~"), ".cache", "huggingface"))
     pasta = os.path.join(base, "hub", f"models--Systran--faster-whisper-{preferido}")
     for _raiz, _dirs, arquivos in os.walk(pasta):
         if "model.bin" in arquivos:
@@ -38,7 +38,7 @@ def escolher_modelo(preferido="small", reserva="tiny"):
     return reserva
 
 
-def _carregar_sem_trava(tamanho):
+def _carregar_sem_trava(tamanho: str):
     if tamanho not in _MODELOS:
         try:
             from faster_whisper import WhisperModel
@@ -47,7 +47,7 @@ def _carregar_sem_trava(tamanho):
                 "A biblioteca faster-whisper não está instalada. "
                 "Instale as dependências com: pip install -r requirements.txt"
             ) from erro
-        print(f"[iAuto] Carregando modelo ASR ({tamanho})...")
+        logger.info("Carregando modelo ASR (%s)...", tamanho)
         modelo = WhisperModel(tamanho, device="cpu", compute_type="int8")
         with _TRAVA_GLOBAL:
             # mantém um único tamanho na RAM (cada Whisper ocupa centenas de MB)
@@ -58,29 +58,25 @@ def _carregar_sem_trava(tamanho):
     return _MODELOS[tamanho]
 
 
-def carregar_modelo(tamanho="small"):
+def carregar_modelo(tamanho: str = "small"):
     """Carrega o modelo ASR do tamanho pedido (na 1ª execução ele é baixado)."""
     with _trava_do(tamanho):
         return _carregar_sem_trava(tamanho)
 
 
-def transcrever(caminho_audio, tamanho_modelo="small", tempo_espera=120):
+def transcrever(caminho_audio: str, tamanho_modelo: str = "small", tempo_espera: int = 120) -> str:
     """Transcreve um arquivo de áudio (wav, mp3, ogg, opus, m4a, webm) em PT-BR.
 
     A inferência é serializada por tamanho de modelo; se a fila não andar em
-    `tempo_espera` segundos, levanta AsrOcupadoErro em vez de segurar a thread
-    indefinidamente.
+    ``tempo_espera`` segundos, levanta AsrOcupadoErro em vez de segurar a
+    thread indefinidamente.
     """
     trava = _trava_do(tamanho_modelo)
     if not trava.acquire(timeout=tempo_espera):
-        raise AsrOcupadoErro(
-            "O serviço de transcrição está ocupado; tente novamente em instantes."
-        )
+        raise AsrOcupadoErro("O serviço de transcrição está ocupado; tente novamente em instantes.")
     try:
         modelo = _carregar_sem_trava(tamanho_modelo)
-        segmentos, _info = modelo.transcribe(
-            caminho_audio, language="pt", vad_filter=True
-        )
+        segmentos, _info = modelo.transcribe(caminho_audio, language="pt", vad_filter=True)
         texto = " ".join(segmento.text.strip() for segmento in segmentos)
     finally:
         trava.release()

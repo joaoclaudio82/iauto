@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iauto"
+version = "0.2.0"
+description = "Entrevista de emprego automatizada por áudio, em português (PT-BR)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "faster-whisper>=1.0.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+    "edge-tts>=7.0",
+    "openai>=1.40",
+]
+
+[project.optional-dependencies]
+# Entrevista ao vivo pelo terminal (microfone/alto-falante locais)
+audio = [
+    "sounddevice>=0.4.6",
+    "soundfile>=0.12.1",
+    "numpy>=1.24",
+    "pyttsx3>=2.90",
+    "gTTS>=2.5.0",
+]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+iauto-servidor = "iauto.api.__main__:principal"
+iauto-entrevista = "iauto.cli.main:principal"
+
+[tool.setuptools.packages.find]
+include = ["iauto*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

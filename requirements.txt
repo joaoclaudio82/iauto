@@ -1,6 +1,5 @@
-# Dependências do SERVIDOR WEB (deploy). Para rodar o CLI localmente com
-# áudio ao vivo, use iauto_prototipo/requirements.txt, que inclui também
-# sounddevice, soundfile, numpy, pyttsx3 e gTTS.
+# Dependências do serviço web em deploy (Railway instala a partir deste
+# arquivo). Para desenvolvimento local, prefira: pip install -e ".[audio,dev]"
 
 # Transcrição ASR (Whisper local)
 faster-whisper>=1.0.0

@@ -1,6 +1,6 @@
 """Análise semântica das respostas com um LLM (via OpenRouter).
 
-Complementa a análise heurística de analise.py: o LLM avalia a aderência com
+Complementa a análise heurística do domínio: o LLM avalia a aderência com
 nuance semântica (entende sinônimos, contexto e profundidade real), enquanto
 os campos objetivos (contagem de palavras, termos identificados, presença de
 exemplo) continuam calculados deterministicamente em Python.
@@ -11,16 +11,25 @@ Configuração por variáveis de ambiente:
                       por exemplo "anthropic/claude-sonnet-4.5"
 
 Sem as duas variáveis — ou em qualquer falha de rede/parse — a análise cai
-para analisar_entrevista (heurística), sem propagar erro ao chamador.
+para a heurística do domínio, sem propagar erro ao chamador.
 """
 
 import json
+import logging
 import os
+from collections.abc import Sequence
 
-from analise import MARCADORES_EXEMPLO, analisar_entrevista, cobertura
-from roteiro import normalizar
+from iauto.dominio.analise import (
+    MARCADORES_EXEMPLO,
+    analisar_entrevista,
+    cobertura,
+    recomendacao_por_nota,
+    situacao_por_nota,
+)
+from iauto.dominio.modelos import Analise, AvaliacaoCompetencia, Resposta, Vaga
+from iauto.dominio.roteiro import normalizar
 
-SITUACOES = ("aderente", "parcial", "lacuna")
+logger = logging.getLogger(__name__)
 
 _INSTRUCAO = """Você é um avaliador técnico de entrevistas de emprego. Avalie a aderência \
 das respostas do candidato às competências da vaga, em português.
@@ -61,7 +70,7 @@ def _cliente_e_modelo():
     return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=chave), modelo
 
 
-def _extrair_json(texto):
+def _extrair_json(texto: str) -> dict:
     """Aceita a resposta mesmo se o modelo envolver o JSON em texto/cercas."""
     try:
         return json.loads(texto)
@@ -72,7 +81,7 @@ def _extrair_json(texto):
         return json.loads(texto[inicio : fim + 1])
 
 
-def _campos_objetivos(resposta, palavras_chave):
+def _campos_objetivos(resposta: str, palavras_chave: Sequence[str]) -> dict:
     """Métricas determinísticas que não devem vir do LLM."""
     resposta = (resposta or "").strip()
     resposta_norm = normalizar(resposta)
@@ -84,42 +93,9 @@ def _campos_objetivos(resposta, palavras_chave):
     }
 
 
-def _analisar_llm(vaga, respostas):
-    cliente, nome_modelo = _cliente_e_modelo()
-    if cliente is None:
-        return None
-
-    mapa_competencias = {c["nome"]: c for c in vaga["competencias"]}
-    itens = [r for r in respostas if r.get("tipo") == "competencia"]
-    if not itens:
-        return None
-
-    material = {
-        "vaga": {"titulo": vaga["titulo"], "descricao": vaga.get("descricao", "")},
-        "competencias": [
-            {
-                "nome": c["nome"],
-                "peso": c.get("peso", 1),
-                "palavras_chave": c.get("palavras_chave", []),
-            }
-            for c in vaga["competencias"]
-        ],
-        "respostas": [
-            {
-                "competencia": r["competencia"],
-                "pergunta": r.get("pergunta", ""),
-                "resposta": r.get("resposta", ""),
-            }
-            for r in itens
-        ],
-    }
-
-    mensagens = [
-        {"role": "system", "content": _INSTRUCAO},
-        {"role": "user", "content": json.dumps(material, ensure_ascii=False)},
-    ]
+def _chamar_modelo(cliente, nome_modelo: str, mensagens: list[dict]):
     try:
-        resposta_llm = cliente.chat.completions.create(
+        return cliente.chat.completions.create(
             model=nome_modelo,
             messages=mensagens,
             response_format={"type": "json_object"},
@@ -129,85 +105,102 @@ def _analisar_llm(vaga, respostas):
     except Exception:
         # alguns modelos/provedores da OpenRouter não suportam response_format;
         # tenta uma vez sem ele (o parser já tolera texto em volta do JSON)
-        resposta_llm = cliente.chat.completions.create(
+        return cliente.chat.completions.create(
             model=nome_modelo,
             messages=mensagens,
             temperature=0.2,
             timeout=90,
         )
+
+
+def _analisar_llm(vaga: Vaga, respostas: Sequence[Resposta]) -> Analise | None:
+    cliente, nome_modelo = _cliente_e_modelo()
+    if cliente is None:
+        return None
+
+    mapa_competencias = {c.nome: c for c in vaga.competencias}
+    itens = [r for r in respostas if r.tipo == "competencia"]
+    if not itens:
+        return None
+
+    material = {
+        "vaga": {"titulo": vaga.titulo, "descricao": vaga.descricao},
+        "competencias": [
+            {"nome": c.nome, "peso": c.peso, "palavras_chave": c.palavras_chave}
+            for c in vaga.competencias
+        ],
+        "respostas": [
+            {"competencia": r.competencia, "pergunta": r.pergunta, "resposta": r.resposta}
+            for r in itens
+        ],
+    }
+
+    mensagens = [
+        {"role": "system", "content": _INSTRUCAO},
+        {"role": "user", "content": json.dumps(material, ensure_ascii=False)},
+    ]
+    resposta_llm = _chamar_modelo(cliente, nome_modelo, mensagens)
     dados = _extrair_json(resposta_llm.choices[0].message.content)
 
     # Valida e normaliza: uma avaliação por competência respondida, nota 0-100.
     recebidas = {a.get("competencia"): a for a in (dados.get("avaliacoes") or [])}
     avaliacoes = []
     for item in itens:
-        nome = item["competencia"]
+        nome = item.competencia
         crua = recebidas.get(nome)
         if crua is None:
             raise ValueError(f"o modelo não avaliou a competência {nome!r}")
         nota = max(0, min(100, round(float(crua["nota"]))))
         situacao = str(crua.get("situacao", "")).strip().lower()
-        if situacao not in SITUACOES:
-            situacao = "aderente" if nota >= 70 else "parcial" if nota >= 40 else "lacuna"
+        if situacao not in ("aderente", "parcial", "lacuna"):
+            situacao = situacao_por_nota(nota, item.resposta)
         competencia = mapa_competencias[nome]
-        avaliacao = {
-            "competencia": nome,
-            "peso": competencia.get("peso", 1),
-            "nota": nota,
-            "situacao": situacao,
-            "trechos_relevantes": [str(t) for t in (crua.get("trechos_relevantes") or [])][:2],
-            "riscos": [str(r) for r in (crua.get("riscos") or [])][:2],
-        }
-        avaliacao.update(
-            _campos_objetivos(item.get("resposta", ""), competencia.get("palavras_chave", []))
+        avaliacoes.append(
+            AvaliacaoCompetencia(
+                competencia=nome,
+                peso=competencia.peso,
+                nota=nota,
+                situacao=situacao,
+                trechos_relevantes=[str(t) for t in (crua.get("trechos_relevantes") or [])][:2],
+                riscos=[str(r) for r in (crua.get("riscos") or [])][:2],
+                **_campos_objetivos(item.resposta, competencia.palavras_chave),
+            )
         )
-        avaliacoes.append(avaliacao)
 
     # Agregados calculados em Python (não confiar em aritmética do modelo),
     # com as mesmas regras da análise heurística.
-    soma_pesos = sum(a["peso"] for a in avaliacoes) or 1
-    nota_geral = round(sum(a["nota"] * a["peso"] for a in avaliacoes) / soma_pesos)
-    destaques = [a["competencia"] for a in avaliacoes if a["situacao"] == "aderente"]
-    lacunas = [a["competencia"] for a in avaliacoes if a["situacao"] == "lacuna"]
-    riscos = [f"{a['competencia']}: {r}" for a in avaliacoes for r in a["riscos"]]
+    soma_pesos = sum(a.peso for a in avaliacoes) or 1
+    nota_geral = round(sum(a.nota * a.peso for a in avaliacoes) / soma_pesos)
+    destaques = [a.competencia for a in avaliacoes if a.situacao == "aderente"]
+    lacunas = [a.competencia for a in avaliacoes if a.situacao == "lacuna"]
+    riscos = [f"{a.competencia}: {r}" for a in avaliacoes for r in a.riscos]
 
     recomendacao = str(dados.get("recomendacao", "")).strip()
     if not recomendacao:
-        if nota_geral >= 70 and not lacunas:
-            recomendacao = "Recomendado para a próxima etapa do processo."
-        elif nota_geral >= 50:
-            recomendacao = (
-                "Aderência intermediária. Avaliar com atenção os riscos e as "
-                "lacunas indicados."
-            )
-        else:
-            recomendacao = "Aderência baixa aos requisitos desta vaga."
+        recomendacao = recomendacao_por_nota(nota_geral, lacunas)
 
-    return {
-        "nota_geral": nota_geral,
-        "recomendacao": recomendacao,
-        "avaliacoes": avaliacoes,
-        "destaques": destaques,
-        "riscos": riscos,
-        "lacunas": lacunas,
-        "metodo": "llm",
-        "modelo_llm": nome_modelo,
-    }
+    return Analise(
+        nota_geral=nota_geral,
+        recomendacao=recomendacao,
+        avaliacoes=avaliacoes,
+        destaques=destaques,
+        riscos=riscos,
+        lacunas=lacunas,
+        metodo="llm",
+        modelo_llm=nome_modelo,
+    )
 
 
-def analisar_com_fallback(vaga, respostas):
+def analisar_com_fallback(vaga: Vaga, respostas: Sequence[Resposta]) -> Analise:
     """Análise via LLM quando configurada; senão (ou em falha), heurística.
 
-    Sempre retorna o formato de analisar_entrevista, acrescido de "metodo"
-    ("llm" ou "heuristico").
+    O campo ``metodo`` da análise indica o caminho usado.
     """
     try:
         resultado = _analisar_llm(vaga, respostas)
         if resultado is not None:
             return resultado
     except Exception as erro:
-        print(f"[iAuto] Análise por LLM falhou ({erro}); usando análise heurística.")
+        logger.warning("Análise por LLM falhou (%s); usando análise heurística.", erro)
 
-    resultado = analisar_entrevista(vaga, respostas)
-    resultado["metodo"] = "heuristico"
-    return resultado
+    return analisar_entrevista(vaga, respostas)

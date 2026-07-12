@@ -1,8 +1,7 @@
-"""Protótipo iAuto: entrevista de emprego automatizada por áudio, em português.
+"""Entrevista automatizada pelo terminal.
 
 Fluxo: roteiro personalizado -> pergunta por voz -> gravação com cronômetro ->
-transcrição ASR (Transformer) -> normalização e trechos relevantes ->
-aderência por competência -> relatório por candidato.
+transcrição ASR (Transformer) -> análise de aderência -> relatório.
 
 Modos de execução:
   --modo audio     entrevista ao vivo com voz (microfone e alto-falante)
@@ -15,69 +14,71 @@ import glob
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 
-from analise import analisar_entrevista
-from relatorio import gerar_relatorio
-from roteiro import gerar_roteiro
+from iauto.dominio.modelos import Candidato, Pergunta, Resposta, Vaga
+from iauto.dominio.relatorio import gerar_relatorio
+from iauto.dominio.roteiro import gerar_roteiro
+from iauto.servicos.analise_llm import analisar_com_fallback
 
+RAIZ_PROJETO = Path(__file__).resolve().parents[2]
 EXTENSOES_AUDIO = ("*.wav", "*.mp3", "*.ogg", "*.opus", "*.m4a")
 
 
-def carregar_json(caminho):
+def _carregar(tipo, caminho):
     with open(caminho, encoding="utf-8") as arquivo:
-        return json.load(arquivo)
+        return tipo.model_validate(json.load(arquivo))
 
 
-def criar_pasta_saida(candidato, base="saida"):
+def criar_pasta_saida(candidato: Candidato, base=None) -> str:
     carimbo = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    nome = candidato["nome"].split()[0].lower()
-    pasta = os.path.join(base, f"{carimbo}_{nome}")
-    os.makedirs(pasta, exist_ok=True)
-    return pasta
+    nome = candidato.nome.split()[0].lower()
+    pasta = Path(base or RAIZ_PROJETO / "saida") / f"{carimbo}_{nome}"
+    pasta.mkdir(parents=True, exist_ok=True)
+    return str(pasta)
 
 
-def entrevista_simulada(roteiro):
+def _com_resposta(pergunta: Pergunta, texto: str, arquivo_audio=None) -> Resposta:
+    return Resposta(**pergunta.model_dump(), resposta=texto, arquivo_audio=arquivo_audio)
+
+
+def entrevista_simulada(roteiro: list[Pergunta]) -> list[Resposta]:
     """Fluxo de teste: as respostas são digitadas no lugar da fala."""
     respostas = []
     for item in roteiro:
         print("\n" + "=" * 70)
-        print(f"[PERGUNTA {item['id']}] {item['pergunta']}")
+        print(f"[PERGUNTA {item.id}] {item.pergunta}")
         try:
             texto = input("[RESPOSTA digitada] > ").strip()
         except EOFError:
             texto = ""
-        item = dict(item)
-        item["resposta"] = texto
-        respostas.append(item)
+        respostas.append(_com_resposta(item, texto))
     return respostas
 
 
 def entrevista_audio(roteiro, pasta_saida, tamanho_modelo, tempo_padrao=None):
     """Entrevista ao vivo: fala a pergunta, grava com cronômetro e transcreve."""
-    from audio_io import falar, gravar_resposta
-    from transcricao import carregar_modelo, transcrever
+    from iauto.cli.audio_io import falar, gravar_resposta
+    from iauto.servicos.transcricao import carregar_modelo, transcrever
 
-    carregar_modelo(tamanho_modelo)  # carrega antes, para não atrasar a primeira resposta
+    carregar_modelo(tamanho_modelo)  # antes, para não atrasar a primeira resposta
     respostas = []
     for item in roteiro:
         print("\n" + "=" * 70)
-        print(f"[PERGUNTA {item['id']}] {item['pergunta']}")
-        falar(item["pergunta"])
-        tempo = tempo_padrao or item["tempo_max"]
-        caminho = os.path.join(pasta_saida, f"resposta_{item['id']:02d}.wav")
+        print(f"[PERGUNTA {item.id}] {item.pergunta}")
+        falar(item.pergunta)
+        tempo = tempo_padrao or item.tempo_max
+        caminho = os.path.join(pasta_saida, f"resposta_{item.id:02d}.wav")
         gravar_resposta(caminho, tempo_max=tempo)
         texto = transcrever(caminho, tamanho_modelo)
         print(f"[TRANSCRIÇÃO] {texto if texto else '(vazio)'}")
-        item = dict(item)
-        item["resposta"] = texto
-        item["arquivo_audio"] = caminho
-        respostas.append(item)
+        respostas.append(_com_resposta(item, texto, caminho))
     return respostas
 
 
 def entrevista_lote(roteiro, pasta_audios, tamanho_modelo):
     """Fluxo assíncrono: transcreve áudios já enviados (por exemplo, via WhatsApp)."""
-    from transcricao import carregar_modelo, transcrever
+    from iauto.servicos.transcricao import carregar_modelo, transcrever
 
     arquivos = []
     for extensao in EXTENSOES_AUDIO:
@@ -94,44 +95,43 @@ def entrevista_lote(roteiro, pasta_audios, tamanho_modelo):
     carregar_modelo(tamanho_modelo)
     respostas = []
     for indice, item in enumerate(roteiro):
-        item = dict(item)
         if indice < len(arquivos):
             caminho = arquivos[indice]
-            print(f"[TRANSCREVENDO] pergunta {item['id']} <- {os.path.basename(caminho)}")
-            item["resposta"] = transcrever(caminho, tamanho_modelo)
-            item["arquivo_audio"] = caminho
+            print(f"[TRANSCREVENDO] pergunta {item.id} <- {os.path.basename(caminho)}")
+            respostas.append(_com_resposta(item, transcrever(caminho, tamanho_modelo), caminho))
         else:
-            item["resposta"] = ""
-        respostas.append(item)
+            respostas.append(_com_resposta(item, ""))
     return respostas
 
 
 def principal():
-    parser = argparse.ArgumentParser(
-        description="Protótipo iAuto de entrevista automatizada por áudio (PT-BR)"
+    parser = argparse.ArgumentParser(description="iAuto: entrevista automatizada por áudio (PT-BR)")
+    parser.add_argument("--vaga", default=str(RAIZ_PROJETO / "dados" / "vaga_exemplo.json"))
+    parser.add_argument(
+        "--candidato", default=str(RAIZ_PROJETO / "dados" / "candidato_exemplo.json")
     )
-    parser.add_argument("--vaga", default="dados/vaga_exemplo.json")
-    parser.add_argument("--candidato", default="dados/candidato_exemplo.json")
     parser.add_argument("--modo", choices=["audio", "lote", "simulado"], default="simulado")
     parser.add_argument("--audios", help="pasta com os áudios das respostas (modo lote)")
     parser.add_argument(
-        "--modelo", default="small",
+        "--modelo",
+        default="small",
         help="tamanho do modelo ASR: tiny, base, small ou medium",
     )
     parser.add_argument(
-        "--tempo", type=int,
+        "--tempo",
+        type=int,
         help="tempo máximo por resposta, em segundos (modo audio)",
     )
     args = parser.parse_args()
 
-    vaga = carregar_json(args.vaga)
-    candidato = carregar_json(args.candidato)
+    vaga = _carregar(Vaga, args.vaga)
+    candidato = _carregar(Candidato, args.candidato)
     pasta_saida = criar_pasta_saida(candidato)
 
     roteiro = gerar_roteiro(vaga, candidato)
     print(
         f"[iAuto] Roteiro gerado com {len(roteiro)} perguntas para "
-        f"{candidato['nome']} (vaga: {vaga['titulo']})."
+        f"{candidato.nome} (vaga: {vaga.titulo})."
     )
 
     if args.modo == "audio":
@@ -143,12 +143,12 @@ def principal():
     else:
         respostas = entrevista_simulada(roteiro)
 
-    analise = analisar_entrevista(vaga, respostas)
+    analise = analisar_com_fallback(vaga, respostas)
     caminho_md, caminho_json = gerar_relatorio(vaga, candidato, respostas, analise, pasta_saida)
 
     print("\n" + "=" * 70)
-    print(f"[iAuto] Nota geral de aderência: {analise['nota_geral']} / 100")
-    print(f"[iAuto] {analise['recomendacao']}")
+    print(f"[iAuto] Nota geral de aderência: {analise.nota_geral} / 100")
+    print(f"[iAuto] {analise.recomendacao}")
     print(f"[iAuto] Relatório salvo em: {caminho_md}")
     print(f"[iAuto] Dados completos em: {caminho_json}")
 

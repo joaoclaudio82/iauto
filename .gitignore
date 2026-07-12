@@ -3,9 +3,13 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+*.egg-info/
+dist/
+.pytest_cache/
+.ruff_cache/
 
 # Saídas de entrevistas (áudios gravados e relatórios gerados)
-iauto_prototipo/saida/
+saida/
 
 # Pacotes e temporários
 *.zip
